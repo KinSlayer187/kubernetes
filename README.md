@@ -113,3 +113,64 @@ Após a instalação, use os seguintes comandos para verificar os nós e os pods
 kubectl get nodes
 kubectl get pods -A
 ```
+## Criando um Pod manualmente
+- Após a instalação e configuração do cluster, você pode testar se tudo está funcionando corretamente criando um pod manualmente
+1. Crie um arquivo pod.yaml com o seguinte conteúdo:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.14.2
+    ports:
+    - containerPort: 80
+```
+2. Aplique o pod no cluster
+```bash
+kubectl apply -f pod.yaml
+```
+3. Verifique se o pod foi criado com sucesso
+```bash
+kubectl get pods
+```
+## Instalação do krew (gerenciador de plugins para kubectl)
+- O krew permite buscar, instalar e gerenciar plugins extras para o kubectl
+1. Instalar o krew
+```bash
+(
+  set -x; cd "$(mktemp -d)" &&
+  OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
+  ARCH="$(uname -m)" &&
+  # Corrige nomes de arquitetura
+  if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi
+  if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
+  KREW="krew-${OS}_${ARCH}" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
+  tar zxvf "${KREW}.tar.gz" &&
+  ./"${KREW}" install krew
+)
+```
+2. Após isso, adicione o diretório do Krew no seu PATH
+```bash
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+```
+3. Verifique a instalação do Krew
+```bash
+kubectl krew version
+```
+3. Exemplo de uso
+- Buscar plugins disponíveis
+```bash
+kubectl krew search
+```
+- Instalar um plugin
+```bash
+kubectl krew install ctx
+```
+- Listar plugins instalados
+```bash
+kubectl krew list
+```
