@@ -210,3 +210,19 @@ kubectl get pods -n meu-namespace
 ```bash
 kubectl config set-context --current --namespace=meu-namespace (não é a forma mais ideal, mas ficará para conhecimento)
 ```
+## O que são Pods no Kubernetes?
+- Pod é a menor unidade de execução que pode ser criada e gerenciada pelo Kubernetes.
+- Um pod representa um ou mais containers que compartilham:
+  - A mesma rede (IP, portas).
+  - O mesmo sistema de armazenamento (volumes).
+  - E podem se comunicar entre si diretamente via localhost.
+- Importante: embora um Pod possa ter múltiplos containers, normalmente, tem apenas um container (caso mais comum)
+- O Kubernetes não gerencia containers individuais diretamente, ele gerencia os Pods.
+## Diferença entre Pod e Container
+| Característica | Pod | Container |
+| :-------------:| :--:| :--------:|
+| O que é | Abstração que pode conter um ou mais containers | Instância de uma aplicação em execução isolada |
+| Gerenciado por | Kubernetes | Docker, containerd, cri-o, etc. |
+| Compartilha rede/volume | Sim, entre os containers do mesmo Pod | Não, containers são isolados por padrão |
+| Independência | Não é independente (faz parte do cluster) | É independente (pode rodar sozinho) |
+| Escopo | Kubernetes orquestra Pods | Engine de containers orquestra Containers |
