@@ -174,3 +174,39 @@ kubectl krew install ctx
 ```bash
 kubectl krew list
 ```
+
+## Trabalhando com namespace no Kubernetes
+Namespaces são usados para ogranizar e isolar recursos dentro do cluster Kubernetes
+### Criando um namespace
+```bash
+kubectl create namespace meu-namespace
+```
+1. Usando um Namespace num YAML (Exemplo atualizado do Pod)
+- Você pode utilizar diretamente o namespace dentro do YAML do recurso, como no exemplo abaixo
+```bash
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: meu-namespace
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.14.2
+    ports:
+    - containerPort: 80
+```
+- Ou pode aplicar o YAML e depois mover o recurso para o namespace desejado (não é o ideal)
+2. Listar os Namespaces
+```bash
+kubectl get namespaces
+```
+3. Verifica recursos dentro de um Namespace específico
+```bash
+kubectl get pods -n meu-namespace
+```
+3. Definir um Namespace padrão para o kubectl
+- Se quiser trabalhar dentro de um namespace sem precisar passar -n, configure
+```bash
+kubectl config set-context --current --namespace=meu-namespace (não é a forma mais ideal, mas ficará para conhecimento)
+```
