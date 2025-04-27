@@ -226,3 +226,54 @@ kubectl config set-context --current --namespace=meu-namespace (não é a forma 
 | Compartilha rede/volume | Sim, entre os containers do mesmo Pod | Não, containers são isolados por padrão |
 | Independência | Não é independente (faz parte do cluster) | É independente (pode rodar sozinho) |
 | Escopo | Kubernetes orquestra Pods | Engine de containers orquestra Containers |
+
+## Init Containers no Kubernetes
+1. O que é um Initi Container?
+- Um Init Container é um container que executa antes dos containers normais de um Pod.
+
+- Ele é usado para realizar alguma preparação antes de iniciar o container principal, como:
+    - Garantir que um serviço esteja disponível;
+    - Aguardar algum recurso ser criado;
+    - Fazer pré-configurações ou checagens.
+- Observação: Se o initi container não finaliza com sucesso, o Kubernetes não inicia os containers principais do pod
+## Exemplo de Init Container para Checar conexão
+- Aqui está um exemplo de Pod que usa um Init Container para:
+
+    - Ficar tentando conectar ao serviço do Kubernetes API;
+    - Imprimir no terminal enquanto espera;
+    - Depois que conecta, inicia o container nginx;
+- No vim, .yaml
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-init
+  namespace: meu-namespace
+spec:
+  initContainers:
+  - name: wait-for-cluster
+    image: busybox:1.28
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "Esperando o Cluster estar disponível..."
+      until nslookup kubernetes.default.svc.cluster.local; do
+        echo "Ainda sem conexão... aguardando."
+        sleep 2
+      done
+      echo "Conexão estabelecida! Cluster IP encontrado."
+  containers:
+  - name: nginx
+    image: nginx:1.14.2
+    ports:
+    - containerPort: 80
+```
+### O que acontece no exemplo acima
+1. O Init Container wait-for-cluster:
+  - Usa a imagem busybox (uma imagem super leve)
+  - Executa um loop: tenta resovler o DNS kubernetes.default.svc.cluster.local
+  - Se falhar, escreve "Ainda sem conexão... aguardando" e tenta a cada 2 segundos
+  - Quando conseguir, escreve "Conexão estabelecida! Cluster IP encontrado."
+2. Depois que o Init Container termina com sucesso
+  - O Kubernetes inicia o container principal (nginx)
