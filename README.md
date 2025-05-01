@@ -1,279 +1,81 @@
-# Instalação e Configuração do Kubernetes com Kubeadm e Kubespray
+# Instalação do Kubernetes com kubeadm no Fedora
 
-Este documento descreve os passos para **instalar e configurar o Kubernetes** em um cluster utilizando o **kubeadm** para a instalação inicial e o **Kubespray** para configurações mais avançadas, como clusters com múltiplos nós e alta disponibilidade.
+Este documento descreve como configurar um cluster Kubernetes usando `kubeadm` no Fedora, incluindo a instalação do `containerd` e a configuração de rede com Calico.
 
----
+## Pré-requisitos
 
-## 🚀 Pré-requisitos
+- Fedora Linux
+- Acesso root ou `sudo`
+- `kubeadm`, `kubectl`, `kubelet` instalados
+- `containerd` instalado
 
-- Sistema operacional Linux (Ubuntu, Debian, Fedora, CentOS, etc.)
-- Acesso root ou sudo aos nós
-- SSH configurado para acesso sem senha entre os nós
-- Python 3.6+ e Ansible 2.12+ (necessários para o Kubespray)
-- Desativar o **swap** em todos os nós:
+## Etapas
 
-  ```bash
-  sudo swapoff -a
-  sudo sed -i '/ swap / s/^/#/' /etc/fstab
-  ```
+### 1. Instale o containerd
 
-## Instalação Kubernetes com kubeadm
-### Debian/Ubuntu
-1. Atualize o sistema
 ```bash
-sudo apt update && sudo apt upgrade -y
-```
-2. Instale as dependências
-```bash
-sudo apt install -y apt-transport-https ca-certificates curl
-```
-3. Adicione a chave GPG e o repositório do Kubernetes
-```bash
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/trusted.gpg.d/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-```
-4. Instale o Kubernetes
-```bash
-sudo apt update
-sudo apt install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
+sudo dnf install -y containerd
 ```
 
-## Fedora
-1. Atualize o sistema
+### 2. Configure o containerd
+
 ```bash
-sudo dnf5 update -y
+sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml
 ```
-2. Adicione o repositório
+
+### 3. Habilite e inicie o containerd
+
 ```bash
-cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
-[kubernetes]
-name=Kubernetes
-baseurl=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://pkgs.k8s.io/core:/stable:/v1.29/rpm/repodata/repomd.xml.key
-EOF
+sudo systemctl enable --now containerd
 ```
-3. Instale o Kubernetes
+
+### 4. Desabilite o swap (ou configure corretamente para cgroup v2)
+
 ```bash
-sudo dnf5 install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
-sudo systemctl enable --now kubelet
+sudo swapoff -a
 ```
-### Configuração do Cluster com kubeadm
-1. Inicialize o cluster Kubernetes (no nó master)
+
+Edite `/etc/fstab` para comentar a linha de swap se necessário.
+
+### 5. Inicialize o cluster com kubeadm
+
 ```bash
-sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16
 ```
-2. Configure o kubectl no nó master:
+
+### 6. Configure o kubectl para o usuário atual
+
 ```bash
 mkdir -p $HOME/.kube
-sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
-3. Instale o CNI (Calico ou Flannel). Exemplo com Flannel:
-```bash
-kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-```
-4. Adicione nós worker:
-- Execute o comando fornecido ao final da inicialização do master em cada nó worker:
-```bash
-sudo kubeadm join <IP_MASTER>:<PORTA> --token <TOKEN> --discovery-token-ca-cert-hash sha25
-```
-### Configuração Avançada com Kubespray
-1. Clone o repositório do Kubespray:
-```bash
-git clone https://github.com/kubernetes-sigs/kubespray.git
-cd kubespray
-```
-2. Instale as depedências do Python
-```bash
-sudo pip3 install -r requirements.txt
-```
-3. Copie o inventário de exemplo
-```bash
-cp -rfp inventory/sample inventory/mycluster
-```
-4. Edite o inventário com os IPs dos seus nós
-```bash
-vim ~/inventory/mycluster/hosts.yaml
-```
-5. Execute o playbook do Ansible
-```bash
-ansible-playbook -i inventory/mycluster/hosts.yaml --become --become-user=root cluster.yml
-```
-## ✅ Verificando o estado do cluster
 
-Após a instalação, use os seguintes comandos para verificar os nós e os pods:
+### 7. Instale o Calico (rede de pods)
 
-### Verificar os nós do cluster:
+```bash
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+```
+
+### 8. Remova o taint do nó master para que ele agende pods
+
+```bash
+kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+```
+
+### 9. Verifique o estado do cluster
 
 ```bash
 kubectl get nodes
 kubectl get pods -A
 ```
-## Criando um Pod manualmente
-- Após a instalação e configuração do cluster, você pode testar se tudo está funcionando corretamente criando um pod manualmente
-1. Crie um arquivo pod.yaml com o seguinte conteúdo:
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nginx
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.14.2
-    ports:
-    - containerPort: 80
-```
-2. Aplique o pod no cluster
-```bash
-kubectl apply -f pod.yaml
-```
-3. Verifique se o pod foi criado com sucesso
-```bash
-kubectl get pods
-```
-## Instalação do krew (gerenciador de plugins para kubectl)
-- O krew permite buscar, instalar e gerenciar plugins extras para o kubectl
-1. Instalar o krew
-```bash
-(
-  set -x; cd "$(mktemp -d)" &&
-  OS="$(uname | tr '[:upper:]' '[:lower:]')" &&
-  ARCH="$(uname -m)" &&
-  # Corrige nomes de arquitetura
-  if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi
-  if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
-  KREW="krew-${OS}_${ARCH}" &&
-  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
-  tar zxvf "${KREW}.tar.gz" &&
-  ./"${KREW}" install krew
-)
-```
-2. Após isso, adicione o diretório do Krew no seu PATH
-```bash
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
-```
-3. Verifique a instalação do Krew
-```bash
-kubectl krew version
-```
-3. Exemplo de uso
-- Buscar plugins disponíveis
-```bash
-kubectl krew search
-```
-- Instalar um plugin
-```bash
-kubectl krew install ctx
-```
-- Listar plugins instalados
-```bash
-kubectl krew list
-```
 
-## Trabalhando com namespace no Kubernetes
-Namespaces são usados para ogranizar e isolar recursos dentro do cluster Kubernetes
-### Criando um namespace
-```bash
-kubectl create namespace meu-namespace
-```
-1. Usando um Namespace num YAML (Exemplo atualizado do Pod)
-- Você pode utilizar diretamente o namespace dentro do YAML do recurso, como no exemplo abaixo
-```bash
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nginx
-  namespace: meu-namespace
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.14.2
-    ports:
-    - containerPort: 80
-```
-- Ou pode aplicar o YAML e depois mover o recurso para o namespace desejado (não é o ideal)
-2. Listar os Namespaces
-```bash
-kubectl get namespaces
-```
-3. Verifica recursos dentro de um Namespace específico
-```bash
-kubectl get pods -n meu-namespace
-```
-3. Definir um Namespace padrão para o kubectl
-- Se quiser trabalhar dentro de um namespace sem precisar passar -n, configure
-```bash
-kubectl config set-context --current --namespace=meu-namespace (não é a forma mais ideal, mas ficará para conhecimento)
-```
-## O que são Pods no Kubernetes?
-- Pod é a menor unidade de execução que pode ser criada e gerenciada pelo Kubernetes.
-- Um pod representa um ou mais containers que compartilham:
-  - A mesma rede (IP, portas).
-  - O mesmo sistema de armazenamento (volumes).
-  - E podem se comunicar entre si diretamente via localhost.
-- Importante: embora um Pod possa ter múltiplos containers, normalmente, tem apenas um container (caso mais comum)
-- O Kubernetes não gerencia containers individuais diretamente, ele gerencia os Pods.
-## Diferença entre Pod e Container
-| Característica | Pod | Container |
-| :-------------:| :--:| :--------:|
-| O que é | Abstração que pode conter um ou mais containers | Instância de uma aplicação em execução isolada |
-| Gerenciado por | Kubernetes | Docker, containerd, cri-o, etc. |
-| Compartilha rede/volume | Sim, entre os containers do mesmo Pod | Não, containers são isolados por padrão |
-| Independência | Não é independente (faz parte do cluster) | É independente (pode rodar sozinho) |
-| Escopo | Kubernetes orquestra Pods | Engine de containers orquestra Containers |
+## Dicas
 
-## Init Containers no Kubernetes
-1. O que é um Initi Container?
-- Um Init Container é um container que executa antes dos containers normais de um Pod.
+- Certifique-se de que as portas 6443 e 10250 estão abertas se o firewalld estiver ativo.
+- Use `systemctl enable` para garantir que `containerd` e `kubelet` iniciem automaticamente.
 
-- Ele é usado para realizar alguma preparação antes de iniciar o container principal, como:
-    - Garantir que um serviço esteja disponível;
-    - Aguardar algum recurso ser criado;
-    - Fazer pré-configurações ou checagens.
-- Observação: Se o initi container não finaliza com sucesso, o Kubernetes não inicia os containers principais do pod
-## Exemplo de Init Container para Checar conexão
-- Aqui está um exemplo de Pod que usa um Init Container para:
+---
 
-    - Ficar tentando conectar ao serviço do Kubernetes API;
-    - Imprimir no terminal enquanto espera;
-    - Depois que conecta, inicia o container nginx;
-- No vim, .yaml
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nginx-init
-  namespace: meu-namespace
-spec:
-  initContainers:
-  - name: wait-for-cluster
-    image: busybox:1.28
-    command:
-    - /bin/sh
-    - -c
-    - |
-      echo "Esperando o Cluster estar disponível..."
-      until nslookup kubernetes.default.svc.cluster.local; do
-        echo "Ainda sem conexão... aguardando."
-        sleep 2
-      done
-      echo "Conexão estabelecida! Cluster IP encontrado."
-  containers:
-  - name: nginx
-    image: nginx:1.14.2
-    ports:
-    - containerPort: 80
-```
-### O que acontece no exemplo acima
-1. O Init Container wait-for-cluster:
-  - Usa a imagem busybox (uma imagem super leve)
-  - Executa um loop: tenta resovler o DNS kubernetes.default.svc.cluster.local
-  - Se falhar, escreve "Ainda sem conexão... aguardando" e tenta a cada 2 segundos
-  - Quando conseguir, escreve "Conexão estabelecida! Cluster IP encontrado."
-2. Depois que o Init Container termina com sucesso
-  - O Kubernetes inicia o container principal (nginx)
+Com isso, você terá um cluster Kubernetes funcional no Fedora.
